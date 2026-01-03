@@ -166,6 +166,12 @@ class CodexProvider extends BaseProvider {
     const status = error.response?.status;
     const data = error.response?.data;
 
+    if (status) {
+      error.isUpstreamApiError = true;
+      error.rawBody = data;
+      error.statusCode = status;
+    }
+
     if (status === 429) {
       // 尝试解析重试延迟
       let delayMs = parseRetryDelay(data);
@@ -274,24 +280,31 @@ class CodexProvider extends BaseProvider {
   _buildCodexRequestBody(request) {
     // 处理 input 格式（Codex/Responses API 格式）
     const input = [];
+    const instructionParts = [];
+    const pushInstruction = (text) => {
+      if (!text) return;
+      const trimmed = String(text).trim();
+      if (trimmed) instructionParts.push(trimmed);
+    };
 
     // 添加系统消息
     if (request.system) {
       const systemText = typeof request.system === 'string'
         ? request.system
         : request.system.map(s => s.text || '').join('\n');
-      input.push({
-        type: 'message',
-        role: 'developer',
-        content: this._buildCodexContentParts(systemText)
-      });
+      pushInstruction(systemText);
     }
 
     // 转换 messages
     for (const msg of (request.messages || [])) {
-      const normalizedRole = msg.role === 'system' ? 'developer' : msg.role;
-      const contentParts = this._buildCodexContentParts(msg.content);
+      if (!msg || !msg.role) continue;
+      if (msg.role === 'system' || msg.role === 'developer') {
+        pushInstruction(msg.content);
+        continue;
+      }
 
+      const contentParts = this._buildCodexContentParts(msg.content);
+      const normalizedRole = msg.role === 'assistant' ? 'assistant' : 'user';
       input.push({
         type: 'message',
         role: normalizedRole,
@@ -302,13 +315,16 @@ class CodexProvider extends BaseProvider {
     const body = {
       model: request.model || CODEX_CONSTANTS.DEFAULT_MODEL,
       input,
-      stream: request.stream !== false
+      stream: request.stream !== false,
+      store: false
     };
 
-    // 可选参数
-    if (request.max_tokens) {
-      body.max_output_tokens = request.max_tokens;
+    const instructions = instructionParts.join('\n\n');
+    if (instructions) {
+      body.instructions = instructions;
     }
+
+    // 可选参数
     if (request.temperature !== undefined) {
       body.temperature = request.temperature;
     }
@@ -323,9 +339,6 @@ class CodexProvider extends BaseProvider {
 
   _normalizeOAuthModel(model) {
     if (!model) return CODEX_CONSTANTS.DEFAULT_MODEL;
-    const normalized = String(model).toLowerCase();
-    if (normalized.includes('codex')) return 'gpt-5-codex';
-    if (normalized.includes('gpt-5')) return 'gpt-5';
     return model;
   }
 
