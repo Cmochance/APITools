@@ -282,23 +282,20 @@ class CodexProvider extends BaseProvider {
         : request.system.map(s => s.text || '').join('\n');
       input.push({
         type: 'message',
-        role: 'system',
-        content: systemText
+        role: 'developer',
+        content: this._buildCodexContentParts(systemText)
       });
     }
 
     // 转换 messages
     for (const msg of (request.messages || [])) {
-      const content = typeof msg.content === 'string'
-        ? msg.content
-        : (Array.isArray(msg.content)
-            ? msg.content.filter(p => p.type === 'text').map(p => p.text).join('')
-            : String(msg.content || ''));
+      const normalizedRole = msg.role === 'system' ? 'developer' : msg.role;
+      const contentParts = this._buildCodexContentParts(msg.content);
 
       input.push({
         type: 'message',
-        role: msg.role,
-        content
+        role: normalizedRole,
+        content: contentParts
       });
     }
 
@@ -322,6 +319,22 @@ class CodexProvider extends BaseProvider {
     }
 
     return body;
+  }
+
+  _buildCodexContentParts(content) {
+    if (typeof content === 'string') {
+      return [{ type: 'input_text', text: content }];
+    }
+    if (Array.isArray(content)) {
+      const parts = content
+        .filter(part => part && (part.type === 'text' || part.type === 'input_text'))
+        .map(part => ({ type: 'input_text', text: part.text || '' }));
+      return parts.length > 0 ? parts : [{ type: 'input_text', text: '' }];
+    }
+    if (content && typeof content === 'object' && typeof content.text === 'string') {
+      return [{ type: 'input_text', text: content.text }];
+    }
+    return [{ type: 'input_text', text: String(content || '') }];
   }
 
   /**
