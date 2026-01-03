@@ -1,0 +1,89 @@
+# 使用编译后的二进制文件运行
+# 这个镜像更小，启动更快，内存占用更低
+#
+# 构建方式：
+# 1. 先运行 npm run build:linux 或 npm run build:linux-arm64 生成 dist 目录
+# 2. 然后运行 docker build -f Dockerfile.binary -t antigravity .
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# 安装必要的运行时依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制编译后的文件（由 CI 工作流预先编译）
+# 使用通配符匹配不同架构的二进制文件
+COPY dist/antigravity-linux-* /app/antigravity
+COPY dist/public /app/public
+COPY dist/bin /app/bin
+COPY dist/config.json /app/config.json
+
+# 设置执行权限
+RUN chmod +x /app/antigravity && \
+    (chmod +x /app/bin/* 2>/dev/null || true)
+
+# 创建数据和图片目录，以及带默认配置的 .env 文件
+RUN mkdir -p /app/data /app/public/images && \
+    echo "# 敏感配置（只在 .env 中配置）" > /app/.env && \
+    echo "# 如果不配置以下三项，系统会自动生成随机凭据并在启动时显示" >> /app/.env && \
+    echo "# API_KEY=your-api-key" >> /app/.env && \
+    echo "# ADMIN_USERNAME=your-username" >> /app/.env && \
+    echo "# ADMIN_PASSWORD=your-password" >> /app/.env && \
+    echo "# JWT_SECRET=your-jwt-secret" >> /app/.env && \
+    echo "" >> /app/.env && \
+    echo "# 可选配置" >> /app/.env && \
+    echo "# PROXY=http://127.0.0.1:7890" >> /app/.env && \
+    echo "SYSTEM_INSTRUCTION=你是聊天机器人，名字叫萌萌，如同名字这般，你的性格是软软糯糯萌萌哒的，专门为用户提供聊天和情绪价值，协助进行小说创作或者角色扮演" >> /app/.env && \
+    echo "# IMAGE_BASE_URL=http://your-domain.com" >> /app/.env
+
+# 创建启动脚本：同步环境变量到 .env 文件
+RUN cat > /app/entrypoint.sh << 'EOF'
+#!/bin/sh
+# 同步环境变量到 .env 文件
+ENV_FILE="/app/.env"
+
+# 同步单个环境变量的函数
+# 使用 ${var+x} 语法检测变量是否被设置（包括空值）
+sync_env() {
+  key=$1
+  # 检查环境变量是否被设置（包括空值）
+  if eval "[ \"\${${key}+x}\" ]"; then
+    value=$(eval echo \"\$$key\")
+    # 检查是否已存在该配置
+    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+      # 替换现有配置（使用 # 作为分隔符避免值中的特殊字符问题）
+      sed -i "s#^${key}=.*#${key}=${value}#" "$ENV_FILE"
+    else
+      # 添加新配置
+      echo "${key}=${value}" >> "$ENV_FILE"
+    fi
+    if [ -n "$value" ]; then
+      echo "✓ 已同步环境变量: ${key}=${value}"
+    else
+      echo "✓ 已同步环境变量: ${key}=(空值)"
+    fi
+  fi
+}
+
+# 同步所有支持的环境变量
+sync_env "API_KEY"
+sync_env "ADMIN_USERNAME"
+sync_env "ADMIN_PASSWORD"
+sync_env "JWT_SECRET"
+sync_env "PROXY"
+sync_env "SYSTEM_INSTRUCTION"
+sync_env "IMAGE_BASE_URL"
+
+# 启动应用
+exec /app/antigravity
+EOF
+RUN chmod +x /app/entrypoint.sh
+
+# 暴露端口
+EXPOSE 8045
+
+# 启动应用
+CMD ["/app/entrypoint.sh"]

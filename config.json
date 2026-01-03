@@ -1,0 +1,130 @@
+{
+  "server": {
+    "port": 8045,
+    "host": "0.0.0.0",
+    "maxRequestSize": "500mb",
+    "heartbeatInterval": 15000,
+    "memoryThreshold": 50
+  },
+  "rotation": {
+    "strategy": "request_count",
+    "requestCount": 50
+  },
+  "api": {
+    "url": "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse",
+    "modelsUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
+    "noStreamUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:generateContent",
+    "host": "daily-cloudcode-pa.sandbox.googleapis.com",
+    "userAgent": "antigravity/1.11.3 windows/amd64"
+  },
+  "defaults": {
+    "temperature": 1,
+    "topP": 1,
+    "topK": 50,
+    "maxTokens": 32000,
+    "thinkingBudget": 16000
+  },
+  "cache": {
+    "modelListTTL": 3600000
+  },
+  "other": {
+    "timeout": 300000,
+    "retryTimes": 3,
+    "skipProjectIdFetch": true,
+    "useNativeAxios": false,
+    "useContextSystemPrompt": true,
+    "passSignatureToClient": false
+  },
+  "providers": {
+    "antigravity": {
+      "enabled": true,
+      "priority": 1,
+      "accountsFile": "data/accounts.json"
+    },
+    "kiro": {
+      "enabled": false,
+      "priority": 2,
+      "accountsFile": "data/kiro-accounts.json",
+      "region": "us-east-1"
+    },
+    "codex": {
+      "enabled": false,
+      "priority": 3,
+      "accountsFile": "data/codex-accounts.json"
+    }
+  },
+  "routing": {
+    "modelProviderMapping": {
+      "gemini-*": [
+        "antigravity"
+      ],
+      "claude-*": [
+        "antigravity",
+        "kiro"
+      ],
+      "gpt-*": [
+        "codex"
+      ],
+      "o1-*": [
+        "codex"
+      ],
+      "o3-*": [
+        "codex"
+      ]
+    },
+    "routes": [
+      {
+        "id": "1",
+        "name": "1",
+        "models": [
+          "claude-opus-4-5-thinking",
+          "gemini-3-flash",
+          "gemini-3-pro-high"
+        ],
+        "aliases": {},
+        "apiKeyHashes": [
+          "c5e6596c4037c65bf368f66a906ea6b29b998bff8ed963f35305c000c453a5ea",
+          "6f79b4858fecbf63717c76a6c51199170d33488e66c6fbf3c1a02a7d4d07c611",
+          "2985ba2907e2a0771fbac8e763ec2bf50056b4328168d4c221c54a3606b7577b"
+        ],
+        "modelLimits": {
+          "claude-opus-4-5-thinking": {
+            "total": 5000,
+            "period": "daily",
+            "periodLimit": 500,
+            "expireAt": 1766735886069
+          },
+          "gemini-3-flash": {
+            "total": 3,
+            "period": null,
+            "periodLimit": null,
+            "expireAt": null
+          },
+          "gemini-3-pro-high": {
+            "total": 3500,
+            "period": "daily",
+            "periodLimit": 500,
+            "expireAt": 1767333545765
+          }
+        },
+        "modelUsage": {
+          "claude-opus-4-5-thinking": {
+            "totalUsed": 2,
+            "periodUsed": 0,
+            "lastReset": 0
+          },
+          "gemini-3-flash": {
+            "totalUsed": 3,
+            "periodUsed": 0,
+            "lastReset": 0
+          },
+          "gemini-3-pro-high": {
+            "totalUsed": 0,
+            "periodUsed": 0,
+            "lastReset": 0
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Codex 授权</title>
+    <script>
+        (function() {
+            var isLoggedIn = localStorage.getItem('authToken');
+            if (!isLoggedIn) {
+                window.location.href = 'index.html';
+            }
+            document.documentElement.className = 'auth-ready';
+        })();
+    </script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .auth-container {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+        }
+        .auth-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border-radius: 1rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        @media (prefers-color-scheme: dark) {
+            .auth-card {
+                background: rgba(30, 41, 59, 0.85);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+        }
+        .auth-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .auth-header h2 {
+            margin: 0;
+            background: linear-gradient(135deg, #10a37f, #1a7f64);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 1.5rem;
+        }
+        .back-btn {
+            width: auto;
+            padding: 0.5rem 1rem;
+            background: var(--text-light);
+            font-size: 0.875rem;
+        }
+        .back-btn:hover {
+            background: var(--text);
+        }
+        .import-section {
+            margin-bottom: 1.5rem;
+        }
+        .import-section h4 {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--text);
+        }
+        .import-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .import-tab {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            background: var(--card);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            color: var(--text-light);
+        }
+        .import-tab.active {
+            border-color: #10a37f;
+            background: rgba(16, 163, 127, 0.1);
+            color: #10a37f;
+        }
+        .import-tab:hover:not(.active) {
+            border-color: var(--text-light);
+            color: var(--text);
+        }
+        .import-content {
+            display: none;
+        }
+        .import-content.active {
+            display: block;
+        }
+        .form-group textarea {
+            min-height: 120px;
+            font-family: 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+        }
+        .hint {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+        }
+        .result-box {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            display: none;
+        }
+        .result-box.success {
+            display: block;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+        .result-box.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+        .oauth-btn {
+            background: linear-gradient(135deg, #10a37f, #1a7f64);
+            color: white;
+            font-weight: 600;
+            padding: 1rem;
+            font-size: 1rem;
+            width: 100%;
+        }
+        .oauth-btn:hover {
+            background: linear-gradient(135deg, #1a7f64, #10a37f);
+        }
+        .oauth-info {
+            background: rgba(16, 163, 127, 0.1);
+            border: 1px solid rgba(16, 163, 127, 0.3);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+        .oauth-info ul {
+            margin: 0.5rem 0 0 1.5rem;
+            padding: 0;
+        }
+        .oauth-info li {
+            margin: 0.25rem 0;
+        }
+        .auth-type-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        .auth-type-badge.oauth {
+            background: rgba(16, 163, 127, 0.2);
+            color: #10a37f;
+        }
+        .auth-type-badge.api-key {
+            background: rgba(234, 179, 8, 0.2);
+            color: #d97706;
+        }
+        .oauth-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .oauth-buttons .oauth-btn,
+        .oauth-buttons .copy-btn {
+            flex: 1;
+            min-height: 4.5rem;
+            padding: 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+        }
+        .oauth-buttons .copy-btn {
+            background: var(--info);
+            color: white;
+        }
+        .oauth-buttons .copy-btn:hover {
+            background: #0891b2;
+        }
+        .oauth-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .oauth-actions .btn {
+            flex: 1;
+            padding: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2>📦 Codex 账号导入</h2>
+                <button class="back-btn" onclick="goBack()">← 返回</button>
+            </div>
+
+            <div class="import-tabs">
+                <button class="import-tab active" onclick="switchImportTab('oauth')">OAuth 登录</button>
+                <button class="import-tab" onclick="switchImportTab('apikey')">API Key</button>
+                <button class="import-tab" onclick="switchImportTab('manual')">手动输入</button>
+            </div>
+
+            <!-- OAuth 登录 -->
+            <div id="oauthContent" class="import-content active">
+                <div class="import-section">
+                    <h4>🔐 ChatGPT Plus/Pro OAuth 登录 <span class="auth-type-badge oauth">OAuth</span></h4>
+                    <div class="oauth-info">
+                        <strong>📝 授权流程：</strong>
+                        <ul>
+                            <li>1️⃣ 点击下方按钮打开 OpenAI 授权页面</li>
+                            <li>2️⃣ 完成授权后，复制浏览器地址栏的完整URL</li>
+                            <li>3️⃣ 粘贴URL到下方输入框并提交</li>
+                        </ul>
+                    </div>
+                    <div class="oauth-buttons">
+                        <button class="oauth-btn" onclick="startOAuth()">🔐 打开授权页面</button>
+                        <button class="btn btn-info copy-btn" onclick="copyOAuthUrl()">📋 复制授权链接</button>
+                    </div>
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label>回调URL</label>
+                        <input type="text" id="callbackUrlInput" placeholder="请输入回调窗口的完整url地址" autocomplete="off">
+                    </div>
+                    <div class="oauth-actions">
+                        <button class="btn btn-secondary" onclick="goBack()">取消</button>
+                        <button class="btn btn-success" onclick="processCallbackUrl()">✅ 提交</button>
+                    </div>
+                    <p class="hint">注意：如果本地 OAuth 服务器未运行，请手动复制回调URL并粘贴到上方输入框</p>
+                </div>
+            </div>
+
+            <!-- API Key 导入 -->
+            <div id="apikeyContent" class="import-content">
+                <div class="import-section">
+                    <h4>🔑 OpenAI Platform API Key <span class="auth-type-badge api-key">API Key</span></h4>
+                    <div class="form-group">
+                        <label>API Key *</label>
+                        <input type="password" id="apiKeyInput" placeholder="sk-..." required>
+                        <p class="hint">从 <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a> 获取 API Key</p>
+                    </div>
+                    <div class="form-group">
+                        <label>名称（可选）</label>
+                        <input type="text" id="apiKeyName" placeholder="例如：我的 API Key">
+                    </div>
+                    <button onclick="importApiKey()">💾 保存 API Key</button>
+                </div>
+            </div>
+
+            <!-- 手动输入 OAuth Token -->
+            <div id="manualContent" class="import-content">
+                <div class="import-section">
+                    <h4>✏️ 手动填写 OAuth 凭据 <span class="auth-type-badge oauth">OAuth</span></h4>
+                    <form id="manualForm">
+                        <div class="form-group">
+                            <label>Access Token *</label>
+                            <textarea id="accessToken" rows="3" placeholder="eyJhbGciOi..." required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Refresh Token *</label>
+                            <textarea id="refreshToken" rows="3" placeholder="refresh token..." required></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Email（可选）</label>
+                                <input type="email" id="email" placeholder="your@email.com">
+                            </div>
+                            <div class="form-group">
+                                <label>过期时间（秒）</label>
+                                <input type="number" id="expiresIn" placeholder="3600" value="3600">
+                            </div>
+                        </div>
+                        <button type="submit">💾 保存账号</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 结果显示 -->
+            <div id="resultBox" class="result-box"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/admin';
+
+        // OAuth 常量（与后端一致）
+        const CODEX_OAUTH = {
+            CLIENT_ID: 'app_EMoamEEZ73f0CkXaXp7hrann',
+            AUTHORIZE_URL: 'https://auth.openai.com/oauth/authorize',
+            REDIRECT_URI: 'http://localhost:1455/auth/callback',
+            SCOPE: 'openid profile email offline_access'
+        };
+
+        function getAuthHeaders() {
+            const token = localStorage.getItem('authToken');
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
+        }
+
+        function goBack() {
+            window.location.href = 'index.html';
+        }
+
+        function switchImportTab(tab) {
+            document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.import-content').forEach(c => c.classList.remove('active'));
+
+            const tabs = document.querySelectorAll('.import-tab');
+            if (tab === 'oauth') {
+                tabs[0].classList.add('active');
+                document.getElementById('oauthContent').classList.add('active');
+            } else if (tab === 'apikey') {
+                tabs[1].classList.add('active');
+                document.getElementById('apikeyContent').classList.add('active');
+            } else {
+                tabs[2].classList.add('active');
+                document.getElementById('manualContent').classList.add('active');
+            }
+        }
+
+        function showResult(message, isSuccess) {
+            const resultBox = document.getElementById('resultBox');
+            resultBox.textContent = message;
+            resultBox.className = 'result-box ' + (isSuccess ? 'success' : 'error');
+        }
+
+        // 生成 PKCE challenge
+        async function generatePKCE() {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            const verifier = btoa(String.fromCharCode(...array))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+
+            const encoder = new TextEncoder();
+            const data = encoder.encode(verifier);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            const challenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+
+            return { verifier, challenge };
+        }
+
+        // 生成随机 state
+        function generateState() {
+            const array = new Uint8Array(16);
+            crypto.getRandomValues(array);
+            return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // 开始 OAuth 流程
+        async function startOAuth() {
+            try {
+                const pkce = await generatePKCE();
+                const state = generateState();
+
+                // 保存 PKCE verifier 到 sessionStorage
+                sessionStorage.setItem('codex_pkce_verifier', pkce.verifier);
+                sessionStorage.setItem('codex_oauth_state', state);
+
+                // 构建授权 URL
+                const url = new URL(CODEX_OAUTH.AUTHORIZE_URL);
+                url.searchParams.set('response_type', 'code');
+                url.searchParams.set('client_id', CODEX_OAUTH.CLIENT_ID);
+                url.searchParams.set('redirect_uri', CODEX_OAUTH.REDIRECT_URI);
+                url.searchParams.set('scope', CODEX_OAUTH.SCOPE);
+                url.searchParams.set('code_challenge', pkce.challenge);
+                url.searchParams.set('code_challenge_method', 'S256');
+                url.searchParams.set('state', state);
+                url.searchParams.set('id_token_add_organizations', 'true');
+                url.searchParams.set('codex_cli_simplified_flow', 'true');
+                url.searchParams.set('originator', 'codex_cli_rs');
+
+                // 跳转到授权页面
+                window.open(url.toString(), '_blank', 'width=600,height=700');
+
+                showResult('已打开授权窗口，请在新窗口中完成登录...', true);
+
+                // 开始轮询检查授权结果
+                pollForAuthResult();
+            } catch (error) {
+                showResult(`❌ OAuth 初始化失败: ${error.message}`, false);
+            }
+        }
+
+        // 轮询检查授权结果
+        async function pollForAuthResult() {
+            const maxAttempts = 60; // 最多等待 2 分钟
+            let attempts = 0;
+
+            const poll = async () => {
+                attempts++;
+                if (attempts > maxAttempts) {
+                    showResult('❌ 授权超时，请重试', false);
+                    return;
+                }
+
+                try {
+                    // 检查是否有回调数据
+                    const response = await fetch(`${API_BASE}/codex/oauth/poll`, {
+                        headers: getAuthHeaders()
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            showResult(`✅ 授权成功！${result.data.email ? `(${result.data.email})` : ''}`, true);
+                            setTimeout(() => goBack(), 2000);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // 继续轮询
+                }
+
+                setTimeout(poll, 2000);
+            };
+
+            poll();
+        }
+
+        // 获取 OAuth 授权 URL（不打开窗口）
+        async function getOAuthUrl() {
+            const pkce = await generatePKCE();
+            const state = generateState();
+
+            // 保存 PKCE verifier 到 sessionStorage
+            sessionStorage.setItem('codex_pkce_verifier', pkce.verifier);
+            sessionStorage.setItem('codex_oauth_state', state);
+
+            const url = new URL(CODEX_OAUTH.AUTHORIZE_URL);
+            url.searchParams.set('response_type', 'code');
+            url.searchParams.set('client_id', CODEX_OAUTH.CLIENT_ID);
+            url.searchParams.set('redirect_uri', CODEX_OAUTH.REDIRECT_URI);
+            url.searchParams.set('scope', CODEX_OAUTH.SCOPE);
+            url.searchParams.set('code_challenge', pkce.challenge);
+            url.searchParams.set('code_challenge_method', 'S256');
+            url.searchParams.set('state', state);
+            url.searchParams.set('id_token_add_organizations', 'true');
+            url.searchParams.set('codex_cli_simplified_flow', 'true');
+            url.searchParams.set('originator', 'codex_cli_rs');
+
+            return url.toString();
+        }
+
+        // 复制授权链接
+        async function copyOAuthUrl() {
+            try {
+                const url = await getOAuthUrl();
+                await navigator.clipboard.writeText(url);
+                showResult('✅ 授权链接已复制到剪贴板', true);
+            } catch (error) {
+                showResult(`❌ 复制失败: ${error.message}`, false);
+            }
+        }
+
+        // 处理回调 URL
+        async function processCallbackUrl() {
+            const callbackUrl = document.getElementById('callbackUrlInput').value.trim();
+
+            if (!callbackUrl) {
+                showResult('请粘贴完整的回调URL', false);
+                return;
+            }
+
+            try {
+                const url = new URL(callbackUrl);
+                const code = url.searchParams.get('code');
+
+                if (!code) {
+                    showResult('❌ URL中未找到授权码 (code)', false);
+                    return;
+                }
+
+                // 获取保存的 PKCE verifier
+                const verifier = sessionStorage.getItem('codex_pkce_verifier');
+                if (!verifier) {
+                    showResult('❌ 未找到 PKCE verifier，请重新点击"打开授权页面"或"复制授权链接"后再试', false);
+                    return;
+                }
+
+                showResult('⏳ 正在交换授权码...', true);
+
+                // 调用后端交换 code
+                const response = await fetch(`${API_BASE}/codex/oauth/exchange`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        code: code,
+                        verifier: verifier
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showResult(`✅ 授权成功！${result.data?.email ? `(${result.data.email})` : ''}`, true);
+                    // 清理
+                    sessionStorage.removeItem('codex_pkce_verifier');
+                    sessionStorage.removeItem('codex_oauth_state');
+                    document.getElementById('callbackUrlInput').value = '';
+                    setTimeout(() => goBack(), 2000);
+                } else {
+                    showResult(`❌ 授权失败: ${result.message || '未知错误'}`, false);
+                }
+            } catch (error) {
+                if (error instanceof TypeError && error.message.includes('URL')) {
+                    showResult('❌ 无效的URL格式', false);
+                } else {
+                    showResult(`❌ 处理失败: ${error.message}`, false);
+                }
+            }
+        }
+
+        // 导入 API Key
+        async function importApiKey() {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            const name = document.getElementById('apiKeyName').value.trim();
+
+            if (!apiKey) {
+                showResult('请输入 API Key', false);
+                return;
+            }
+
+            if (!apiKey.startsWith('sk-')) {
+                showResult('API Key 格式不正确，应以 sk- 开头', false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/codex/accounts`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        api_key: apiKey,
+                        name: name || null,
+                        auth_type: 'api_key'
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showResult(`✅ ${result.message}`, true);
+                    document.getElementById('apiKeyInput').value = '';
+                    document.getElementById('apiKeyName').value = '';
+                    setTimeout(() => goBack(), 2000);
+                } else {
+                    showResult(`❌ ${result.message}`, false);
+                }
+            } catch (error) {
+                showResult(`❌ 请求失败: ${error.message}`, false);
+            }
+        }
+
+        // 手动表单提交
+        document.getElementById('manualForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const accessToken = document.getElementById('accessToken').value.trim();
+            const refreshToken = document.getElementById('refreshToken').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const expiresIn = parseInt(document.getElementById('expiresIn').value) || 3600;
+
+            if (!accessToken || !refreshToken) {
+                showResult('Access Token 和 Refresh Token 必填', false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/codex/accounts`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                        email: email || null,
+                        expires_at: Date.now() + expiresIn * 1000,
+                        auth_type: 'oauth'
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showResult(`✅ ${result.message}`, true);
+                    document.getElementById('manualForm').reset();
+                    setTimeout(() => goBack(), 2000);
+                } else {
+                    showResult(`❌ ${result.message}`, false);
+                }
+            } catch (error) {
+                showResult(`❌ 请求失败: ${error.message}`, false);
+            }
+        });
+    </script>
+</body>
+</html>

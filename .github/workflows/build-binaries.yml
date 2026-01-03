@@ -1,0 +1,135 @@
+name: Build Binaries
+
+on:
+  push:
+    branches: [ '**' ]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to build (comma-separated: win,linux,linux-arm64,macos,macos-arm64,all)'
+        required: false
+        default: 'all'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64
+          - os: windows-latest
+            target: win
+            artifact_name: antigravity-win-x64
+            asset_name: antigravity-win-x64.zip
+          # Linux x64
+          - os: ubuntu-latest
+            target: linux
+            artifact_name: antigravity-linux-x64
+            asset_name: antigravity-linux-x64.tar.gz
+          # Linux ARM64 (for Termux)
+          - os: ubuntu-latest
+            target: linux-arm64
+            artifact_name: antigravity-linux-arm64
+            asset_name: antigravity-linux-arm64.tar.gz
+          # macOS x64
+          - os: macos-latest
+            target: macos
+            artifact_name: antigravity-macos-x64
+            asset_name: antigravity-macos-x64.tar.gz
+          # macOS ARM64
+          - os: macos-latest
+            target: macos-arm64
+            artifact_name: antigravity-macos-arm64
+            asset_name: antigravity-macos-arm64.tar.gz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build binary
+        run: npm run build:${{ matrix.target }}
+
+      - name: List dist contents
+        run: |
+          echo "=== dist directory contents ==="
+          ls -la dist/
+        shell: bash
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd dist
+          7z a -tzip ../${{ matrix.asset_name }} *
+        shell: pwsh
+
+      - name: Package (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd dist
+          tar -czvf ../${{ matrix.asset_name }} *
+        shell: bash
+
+      - name: Upload artifact (compressed archive for release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.asset_name }}
+          retention-days: 30
+          compression-level: 0  # 不再压缩，因为文件已经是压缩包
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: |
+          echo "=== Downloaded artifacts ==="
+          find artifacts -type f -ls
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: binary-${{ steps.sha.outputs.short }}
+          name: Binary Build ${{ steps.sha.outputs.short }}
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.tar.gz
+          generate_release_notes: false
+          body: |
+            自动构建的二进制文件 (实验性)
+            
+            分支: `${{ github.ref_name }}`
+            提交: ${{ github.sha }}
+            
+            ## 下载
+            - Windows x64: `antigravity-win-x64.zip`
+            - Linux x64: `antigravity-linux-x64.tar.gz`
+            - Linux ARM64 (Termux): `antigravity-linux-arm64.tar.gz`
+            - macOS x64: `antigravity-macos-x64.tar.gz`
+            - macOS ARM64: `antigravity-macos-arm64.tar.gz`
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

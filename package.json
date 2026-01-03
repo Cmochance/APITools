@@ -1,0 +1,69 @@
+{
+  "name": "antigravity-to-openai",
+  "version": "1.0.0",
+  "description": "Antigravity API 转 OpenAI 格式的代理服务",
+  "type": "module",
+  "main": "src/server/index.js",
+  "bin": "src/server/index.js",
+  "scripts": {
+    "start": "node --expose-gc src/server/index.js",
+    "start:no-gc": "node src/server/index.js",
+    "login": "node scripts/oauth-server.js",
+    "refresh": "node scripts/refresh-tokens.js",
+    "dev": "node --expose-gc --watch src/server/index.js",
+    "build": "node scripts/build.js --target=win",
+    "build:win": "node scripts/build.js --target=win",
+    "build:linux": "node scripts/build.js --target=linux",
+    "build:linux-arm64": "node scripts/build.js --target=linux-arm64",
+    "build:macos": "node scripts/build.js --target=macos",
+    "build:macos-arm64": "node scripts/build.js --target=macos-arm64",
+    "build:all": "node scripts/build.js --target=all"
+  },
+  "keywords": [
+    "antigravity",
+    "openai",
+    "api",
+    "proxy"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "https-proxy-agent": "^5.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.2",
+    "pkg": "^5.8.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "pkg": {
+    "scripts": [
+      "src/**/*.js",
+      "scripts/**/*.js"
+    ],
+    "assets": [
+      "public/*.html",
+      "public/*.css",
+      "public/js/**/*",
+      "public/assets/**/*",
+      "src/bin/**/*",
+      ".env.example",
+      "config.json"
+    ],
+    "targets": [
+      "node18-win-x64",
+      "node18-linux-x64",
+      "node18-linux-arm64",
+      "node18-macos-x64",
+      "node18-macos-arm64"
+    ],
+    "outputPath": "dist"
+  }
+}
