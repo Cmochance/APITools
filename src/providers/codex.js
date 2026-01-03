@@ -325,8 +325,20 @@ class CodexProvider extends BaseProvider {
     }
 
     // 可选参数
+    if (request.max_tokens !== undefined && request.max_tokens !== null) {
+      body.max_output_tokens = request.max_tokens;
+    }
     if (request.temperature !== undefined) {
       body.temperature = request.temperature;
+    }
+    if (!body.reasoning) {
+      body.reasoning = { effort: 'medium', summary: 'auto' };
+    }
+    if (!body.text) {
+      body.text = { verbosity: 'medium' };
+    }
+    if (!body.include) {
+      body.include = ['reasoning.encrypted_content'];
     }
 
     // 工具定义
