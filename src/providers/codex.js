@@ -321,6 +321,14 @@ class CodexProvider extends BaseProvider {
     return body;
   }
 
+  _normalizeOAuthModel(model) {
+    if (!model) return CODEX_CONSTANTS.DEFAULT_MODEL;
+    const normalized = String(model).toLowerCase();
+    if (normalized.includes('codex')) return 'gpt-5-codex';
+    if (normalized.includes('gpt-5')) return 'gpt-5';
+    return model;
+  }
+
   _buildCodexContentParts(content) {
     if (typeof content === 'string') {
       return [{ type: 'input_text', text: content }];
@@ -568,7 +576,8 @@ class CodexProvider extends BaseProvider {
 
     try {
       if (config.isOAuth) {
-        const body = this._buildCodexRequestBody({ ...request, stream: false });
+        const model = this._normalizeOAuthModel(request.model);
+        const body = this._buildCodexRequestBody({ ...request, model, stream: false });
         const response = await axios.post(
           `${config.baseUrl}/codex/responses`,
           body,
@@ -612,7 +621,8 @@ class CodexProvider extends BaseProvider {
 
     try {
       if (config.isOAuth) {
-        const body = this._buildCodexRequestBody({ ...request, stream: true });
+        const model = this._normalizeOAuthModel(request.model);
+        const body = this._buildCodexRequestBody({ ...request, model, stream: true });
         const response = await axios.post(
           `${config.baseUrl}/codex/responses`,
           body,
