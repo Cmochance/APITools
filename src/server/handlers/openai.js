@@ -9,6 +9,7 @@ import { AppError, buildOpenAIErrorPayload } from '../../utils/errors.js';
 import logger from '../../utils/logger.js';
 import config, { saveConfigJson } from '../../config/config.js';
 import tokenManager from '../../auth/token_manager.js';
+import codexProvider from '../../providers/codex.js';
 import {
   createResponseMeta,
   setStreamHeaders,
@@ -210,6 +211,14 @@ export const createStreamChunk = (id, created, model, delta, finish_reason = nul
   return chunk;
 };
 
+const isCodexModel = (modelId) => {
+  if (!modelId) return false;
+  const normalized = String(modelId).toLowerCase();
+  if (normalized.startsWith('gpt-') || normalized.startsWith('gpt_')) return true;
+  if (/^o\d/.test(normalized)) return true;
+  return normalized.includes('codex');
+};
+
 /**
  * 处理 OpenAI 格式的聊天请求
  * @param {Request} req - Express请求对象
@@ -281,6 +290,45 @@ export const handleOpenAIRequest = async (req, res) => {
         const err = new AppError(errMsg, 429, 'rate_limit_error');
         return res.status(429).json(buildOpenAIErrorPayload(err, 429));
       }
+    }
+
+    if (isCodexModel(actualModel)) {
+      if (!codexProvider.initialized) {
+        await codexProvider.initialize();
+      }
+
+      if (stream) {
+        setStreamHeaders(res);
+
+        const heartbeatTimer = createHeartbeat(res);
+        const { id, created } = createResponseMeta();
+
+        try {
+          const codexRequest = { model: actualModel, messages, stream: true, tools, ...params };
+          for await (const delta of codexProvider.chatOpenAIStream(codexRequest)) {
+            if (!delta) continue;
+            writeStreamData(res, createStreamChunk(id, created, requestedModel, { content: delta }));
+          }
+
+          writeStreamData(res, createStreamChunk(id, created, requestedModel, {}, 'stop'));
+          clearInterval(heartbeatTimer);
+          endStream(res);
+        } catch (error) {
+          clearInterval(heartbeatTimer);
+          throw error;
+        }
+      } else {
+        req.setTimeout(0);
+        res.setTimeout(0);
+
+        const codexRequest = { model: actualModel, messages, stream: false, tools, ...params };
+        const response = await codexProvider.chatOpenAI(codexRequest);
+        if (response && typeof response === 'object') {
+          response.model = requestedModel;
+        }
+        return res.json(response);
+      }
+      return;
     }
     
     const token = await tokenManager.getToken();

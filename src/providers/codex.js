@@ -541,25 +541,150 @@ class CodexProvider extends BaseProvider {
   }
 
   /**
+   * 处理 OpenAI 格式的聊天请求（非流式）
+   */
+  async chatOpenAI(request) {
+    const account = await this.getToken();
+    if (!account) {
+      throw new Error('No available Codex account');
+    }
+
+    this.log('info', `Processing OpenAI request with model: ${request.model} (auth_type: ${account.auth_type})`);
+
+    const config = this._getRequestConfig(account);
+
+    try {
+      if (config.isOAuth) {
+        const body = this._buildCodexRequestBody({ ...request, stream: false });
+        const response = await axios.post(
+          `${config.baseUrl}/codex/responses`,
+          body,
+          {
+            headers: config.headers,
+            timeout: CODEX_CONSTANTS.AXIOS_TIMEOUT
+          }
+        );
+        this._clearRateLimited(account.id);
+        return this._convertCodexToOpenAIResponse(response.data, request.model);
+      }
+
+      const body = this._buildChatRequestBody({ ...request, stream: false });
+      const response = await axios.post(
+        `${config.baseUrl}/chat/completions`,
+        body,
+        {
+          headers: config.headers,
+          timeout: CODEX_CONSTANTS.AXIOS_TIMEOUT
+        }
+      );
+      this._clearRateLimited(account.id);
+      return response.data;
+    } catch (error) {
+      this._handleApiError(error, account.id);
+    }
+  }
+
+  /**
+   * 处理 OpenAI 格式的聊天请求（流式）
+   */
+  async *chatOpenAIStream(request) {
+    const account = await this.getToken();
+    if (!account) {
+      throw new Error('No available Codex account');
+    }
+
+    this.log('info', `Processing OpenAI stream request with model: ${request.model} (auth_type: ${account.auth_type})`);
+
+    const config = this._getRequestConfig(account);
+
+    try {
+      if (config.isOAuth) {
+        const body = this._buildCodexRequestBody({ ...request, stream: true });
+        const response = await axios.post(
+          `${config.baseUrl}/codex/responses`,
+          body,
+          {
+            headers: config.headers,
+            timeout: CODEX_CONSTANTS.AXIOS_TIMEOUT,
+            responseType: 'stream'
+          }
+        );
+
+        let buffer = '';
+        for await (const chunk of response.data) {
+          buffer += chunk.toString();
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.type === 'response.output_text.delta' && parsed.delta) {
+                  yield parsed.delta;
+                } else if (parsed.type === 'response.content_part.delta' && parsed.delta?.text) {
+                  yield parsed.delta.text;
+                }
+              } catch {
+                // 忽略解析错误
+              }
+            }
+          }
+        }
+        this._clearRateLimited(account.id);
+        return;
+      }
+
+      const body = this._buildChatRequestBody({ ...request, stream: true });
+      const response = await axios.post(
+        `${config.baseUrl}/chat/completions`,
+        body,
+        {
+          headers: config.headers,
+          timeout: CODEX_CONSTANTS.AXIOS_TIMEOUT,
+          responseType: 'stream'
+        }
+      );
+
+      let buffer = '';
+      for await (const chunk of response.data) {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta?.content;
+              if (delta) {
+                yield delta;
+              }
+            } catch {
+              // 忽略解析错误
+            }
+          }
+        }
+      }
+      this._clearRateLimited(account.id);
+    } catch (error) {
+      this._handleApiError(error, account.id);
+    }
+  }
+
+  /**
    * 解析 Codex Responses API 响应
    * @private
    */
   _parseCodexResponse(responseData, model) {
     // Codex 响应格式解析
-    let content = '';
-
-    if (responseData.output) {
-      // 提取 output 中的文本
-      for (const item of responseData.output) {
-        if (item.type === 'message' && item.content) {
-          for (const part of item.content) {
-            if (part.type === 'output_text' || part.type === 'text') {
-              content += part.text || '';
-            }
-          }
-        }
-      }
-    }
+    const content = this._extractCodexOutputText(responseData);
 
     return {
       id: responseData.id || uuidv4(),
@@ -573,6 +698,59 @@ class CodexProvider extends BaseProvider {
       },
       content: [{ type: 'text', text: content }]
     };
+  }
+
+  /**
+   * 将 Codex Responses API 响应转换为 OpenAI 格式
+   * @private
+   */
+  _convertCodexToOpenAIResponse(responseData, model) {
+    const content = this._extractCodexOutputText(responseData);
+    const created = Math.floor(Date.now() / 1000);
+    const promptTokens = responseData.usage?.input_tokens || 0;
+    const completionTokens = responseData.usage?.output_tokens || 0;
+
+    return {
+      id: responseData.id || `chatcmpl-${Date.now()}`,
+      object: 'chat.completion',
+      created,
+      model,
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant',
+          content
+        },
+        finish_reason: 'stop'
+      }],
+      usage: {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: promptTokens + completionTokens
+      }
+    };
+  }
+
+  /**
+   * 提取 Codex Responses API 文本内容
+   * @private
+   */
+  _extractCodexOutputText(responseData) {
+    let content = '';
+
+    if (responseData.output) {
+      for (const item of responseData.output) {
+        if (item.type === 'message' && item.content) {
+          for (const part of item.content) {
+            if (part.type === 'output_text' || part.type === 'text') {
+              content += part.text || '';
+            }
+          }
+        }
+      }
+    }
+
+    return content;
   }
 
   /**
